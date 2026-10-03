@@ -110,3 +110,76 @@ Judgment calls not already fixed in CLAUDE.md. Format: date, decision, alternati
 - Not added: `sha256`, `email`, `code` and `storage_key` already get an index from their UNIQUE
   constraint. With ~20 sample images Postgres may still choose a sequential scan; the indexes matter
   as the table grows.
+
+## 2026-10-02 — JWT in memory + localStorage, not an httpOnly cookie (Stage 2, required note)
+- **Decision (already made in CLAUDE.md):** The API returns the JWT in the login response body; the
+  frontend keeps it in memory and `localStorage` and sends `Authorization: Bearer <token>`.
+- **Alternative:** Server sets the token in an `httpOnly; Secure; SameSite` cookie.
+- **Trade-off:** localStorage is readable by any JavaScript on the page, so an XSS bug could steal
+  the token; an httpOnly cookie can't be read by JS. But cookies are sent automatically, so they
+  need CSRF protection (SameSite + CSRF token), and cross-port local dev (5173 → 8000) needs
+  careful CORS/cookie settings. For a local demo with no third-party scripts, bearer tokens are
+  simpler to build, test and explain. For production: httpOnly cookie + CSRF protection, or a
+  short-lived access token in memory plus a refresh token in an httpOnly cookie.
+- **Known consequence:** `<img src>` can't send a bearer header, so the frontend must fetch images
+  with the header and display blob URLs (Stage 6).
+
+## 2026-10-02 — Token lifetime 8 hours, no refresh tokens
+- **Decision:** HS256 JWT with `sub` (user id), `iat`, `exp`; `JWT_EXPIRE_MINUTES=480` default.
+- **Alternatives:** 1 hour (safer, but needs refresh tokens to be usable); 24 hours.
+- **Reason:** A working day with no refresh logic. HS256 (one shared secret) fits because the same
+  service both signs and verifies; RS256 key pairs help only when other services verify tokens.
+
+## 2026-10-02 — Load the user from the DB on every request
+- **Decision:** `get_current_user` decodes the token, then loads the user by id; inactive or
+  missing → 401. The role is NOT stored in the token — the DB role is always used.
+- **Alternatives:** Trust role/active claims inside the token (no DB query).
+- **Reason:** Deactivation and role changes take effect on the very next request instead of when
+  the token expires. Cost is one primary-key lookup per request — negligible at this scale.
+
+## 2026-10-02 — Failed logins: one generic 401
+- **Decision:** Unknown email, wrong password and deactivated account all return
+  401 `{"detail":"Invalid email or password"}`. For an unknown email we still run argon2 against a
+  dummy hash so response time doesn't reveal whether the email exists. Failures are logged
+  (`logging`), not written to `audit_log`; successful logins are audited as LOGIN.
+- **Alternatives:** 403 "account disabled" for deactivated users (friendlier, leaks existence).
+- **Reason:** Don't help attackers enumerate accounts. Limitation: no rate limiting / lockout.
+
+## 2026-10-02 — New audit action USER_CREATE (conflicts with CLAUDE.md action list)
+- **Decision:** Added `USER_CREATE` to the `audit_log.action` CHECK list. Role changes use
+  `ROLE_CHANGE` (details `{"from","to"}`); activate/deactivate uses `UPDATE` with
+  `entity_type='user'` (details `{"is_active":{"from","to"}}`). Applied with `docker compose down -v`.
+- **Alternatives:** Don't audit user creation (keeps CLAUDE.md unchanged, leaves a gap).
+- **Reason:** "Every change is traceable." CLAUDE.md's action list needs updating by the owner.
+
+## 2026-10-02 — Audit rows are written in the same transaction as the change
+- **Decision:** `write_audit(conn, ...)` takes the caller's connection.
+- **Alternatives:** Separate connection/transaction for audit writes.
+- **Reason:** The change and its audit row commit together or not at all — no audited change that
+  didn't happen, and no change without an audit row.
+
+## 2026-10-02 — Experiments: any logged-in user lists, admin + researcher create
+- **Decision:** `GET /api/experiments` for all roles; `POST` for admin and researcher (viewer 403).
+  Lives in `routes_experiments.py` (not in the CLAUDE.md layout, which has no home for it).
+  Experiment creation is not audited (no fitting action in the list).
+- **Alternatives:** Admin-only creation.
+- **Reason:** Researchers run the experiments; viewers are read-only everywhere.
+
+## 2026-10-02 — Admins can't change their own role or deactivate themselves
+- **Decision:** `PATCH /api/users/{own id}` → 400.
+- **Alternatives:** Allow it.
+- **Reason:** Prevents an admin from accidentally locking every admin out. Another admin can do it.
+
+## 2026-10-02 — New-user passwords: admin sets them, minimum 8 characters
+- **Decision:** `POST /api/users` requires `password` of length ≥ 8 (422 otherwise). No
+  self-service password change/reset (out of scope). Emails are checked with a simple
+  `something@something.tld` regex and lowercased, instead of adding `email-validator`.
+- **Alternatives:** 12-character minimum; `pydantic[email]` for full email validation.
+- **Reason:** Fast to build, one fewer dependency, good enough for an internal tool.
+
+## 2026-10-02 — Dependencies declared with `Annotated[...]`
+- **Decision:** Routes take `user: security.CurrentUser` or `admin: AdminUser`, where these are
+  `Annotated[dict, Depends(...)]` aliases; `require_role(...)` returns a `Depends`.
+- **Alternatives:** `user: dict = Depends(...)` defaults and disable ruff rule B008.
+- **Reason:** FastAPI's recommended style; keeps ruff's B008 bug check on; the role rule is visible
+  in each route's signature.

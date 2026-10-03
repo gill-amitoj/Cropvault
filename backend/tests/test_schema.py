@@ -8,7 +8,7 @@ def insert_user(conn, email="r@example.com", role="researcher"):
     return conn.execute(
         "INSERT INTO users (email, password_hash, role) VALUES (%s, 'x', %s) RETURNING id",
         (email, role),
-    ).fetchone()[0]
+    ).fetchone()["id"]
 
 
 def insert_image(conn, user_id, sha="a" * 64, parent_image_id=None, derivation=None):
@@ -21,14 +21,14 @@ def insert_image(conn, user_id, sha="a" * 64, parent_image_id=None, derivation=N
         RETURNING id
         """,
         (f"originals/{sha}", sha, user_id, parent_image_id, derivation),
-    ).fetchone()[0]
+    ).fetchone()["id"]
 
 
 def test_apply_schema_is_idempotent_and_seeds_experiments(clean_db):
     db.apply_schema()
     db.apply_schema()
     with db.get_connection() as conn:
-        codes = [r[0] for r in conn.execute("SELECT code FROM experiments ORDER BY code")]
+        codes = [r["code"] for r in conn.execute("SELECT code FROM experiments ORDER BY code")]
     assert codes == ["EXP-2026-001", "EXP-2026-002"]
 
 
@@ -89,7 +89,7 @@ def test_deleting_image_deletes_its_annotations(clean_db):
             (image_id, user_id),
         )
         conn.execute("DELETE FROM images WHERE id = %s", (image_id,))
-        count = conn.execute("SELECT count(*) FROM annotations").fetchone()[0]
+        count = conn.execute("SELECT count(*) AS n FROM annotations").fetchone()["n"]
     assert count == 0
 
 
@@ -115,5 +115,5 @@ def test_capture_date_is_a_date_column(clean_db):
         data_type = conn.execute(
             """SELECT data_type FROM information_schema.columns
                WHERE table_name = 'images' AND column_name = 'capture_date'"""
-        ).fetchone()[0]
+        ).fetchone()["data_type"]
     assert data_type == "date"

@@ -60,7 +60,7 @@ CREATE TABLE IF NOT EXISTS audit_log (
     user_id     BIGINT REFERENCES users (id),
     action      TEXT NOT NULL CHECK (action IN (
                     'LOGIN', 'UPLOAD', 'UPDATE', 'DELETE',
-                    'ANNOTATE', 'CROP', 'SEGMENT', 'ROLE_CHANGE')),
+                    'ANNOTATE', 'CROP', 'SEGMENT', 'ROLE_CHANGE', 'USER_CREATE')),
     entity_type TEXT NOT NULL,
     entity_id   BIGINT,
     details     JSONB,

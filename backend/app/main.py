@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import APIRouter, FastAPI
 from fastapi.responses import JSONResponse
 
-from app import config, db, storage
+from app import config, db, routes_auth, routes_experiments, routes_users, storage
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -46,4 +46,7 @@ def health():
     return JSONResponse(body, status_code=200 if healthy else 503)
 
 
+api.include_router(routes_auth.router)
+api.include_router(routes_users.router)
+api.include_router(routes_experiments.router)
 app.include_router(api)
