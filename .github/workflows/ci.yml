@@ -7,6 +7,24 @@ on:
 jobs:
   backend:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: cropvault
+          POSTGRES_PASSWORD: ci-only-password
+          POSTGRES_DB: cropvault_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U cropvault"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      POSTGRES_HOST: localhost
+      POSTGRES_USER: cropvault
+      POSTGRES_PASSWORD: ci-only-password
     defaults:
       run:
         working-directory: backend

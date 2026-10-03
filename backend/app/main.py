@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import APIRouter, FastAPI
 from fastapi.responses import JSONResponse
 
-from app import db, storage
+from app import config, db, storage
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -14,6 +14,9 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Without the schema the API is useless, so a DB failure here stops startup.
+    db.apply_schema()
+    db.seed_admin(config.ADMIN_EMAIL, config.ADMIN_PASSWORD)
     # Don't crash the API if MinIO is down at startup; /health will report it.
     try:
         storage.ensure_bucket()

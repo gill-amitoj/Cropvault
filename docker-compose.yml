@@ -40,6 +40,7 @@ services:
       - "8000:8000"
     volumes:
       - ./backend:/app # live code reload during development
+      - ./db:/db:ro # schema.sql + seed.sql, applied on startup
     depends_on:
       db:
         condition: service_healthy

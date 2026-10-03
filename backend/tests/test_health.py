@@ -14,7 +14,9 @@ def fail():
 
 @pytest.fixture
 def client(monkeypatch):
-    # Skip the real bucket creation at startup.
+    # Skip the real schema, admin seed and bucket creation at startup.
+    monkeypatch.setattr(db, "apply_schema", ok)
+    monkeypatch.setattr(db, "seed_admin", lambda email, password: None)
     monkeypatch.setattr(storage, "ensure_bucket", ok)
     with TestClient(main.app) as c:
         yield c

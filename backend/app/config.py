@@ -21,3 +21,9 @@ MINIO_ROOT_USER = _require("MINIO_ROOT_USER")
 MINIO_ROOT_PASSWORD = _require("MINIO_ROOT_PASSWORD")
 MINIO_BUCKET = os.environ.get("MINIO_BUCKET", "cropvault-images")
 MINIO_SECURE = os.environ.get("MINIO_SECURE", "false").lower() == "true"
+
+# Folder holding schema.sql and seed.sql (mounted at /db in Docker)
+DB_DIR = os.environ.get("DB_DIR", "/db")
+
+ADMIN_EMAIL = _require("ADMIN_EMAIL")
+ADMIN_PASSWORD = _require("ADMIN_PASSWORD")
