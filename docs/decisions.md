@@ -262,3 +262,39 @@ Judgment calls not already fixed in CLAUDE.md. Format: date, decision, alternati
   Lives in `routes_audit.py` (not in the CLAUDE.md layout).
 - **Reason:** Uses the pagination limits already decided in CLAUDE.md; the same response shape is
   proposed for `GET /images` in Stage 4.
+
+## 2026-10-02 — Search filter behaviour (Stage 4)
+- **Decision:** `GET /api/images` (every logged-in role), filters combined with AND:
+  - `species`: case-insensitive EXACT match (`wheat` finds `Wheat`, `whe` finds nothing).
+  - `experiment`: by code; an unknown code returns an empty page (200), not an error.
+  - `station`: exact, case-sensitive (station ids are codes like `ST01`).
+  - `tags=a,b`: image must have ALL listed tags (`tags @> ARRAY[...]`); input normalized like
+    on upload (trimmed, lowercased).
+  - `date_from` / `date_to`: both inclusive; `date_from > date_to` → 422; images with no
+    `capture_date` are excluded whenever a date filter is used.
+  - Derived images (crops/masks) are included; the frontend can label them via `derivation`.
+- **Alternatives:** tags match ANY (`&&`); case-sensitive species; unknown experiment → 400;
+  reversed range → empty; originals-only by default.
+- **Reason:** ALL-tags narrows results like most search UIs. A filter that matches nothing is not
+  an error. Everything stays parameterized: `search_where()` only joins fixed SQL fragments; every
+  user value is a `%s` parameter (a test sends `wheat' OR '1'='1` and gets 0 results).
+
+## 2026-10-02 — Search sort order and pagination
+- **Decision:** `ORDER BY capture_date DESC NULLS LAST, id DESC`; `page` ≥ 1, `page_size` 1-100
+  (default 24); response `{items, total, page, page_size}`; a page past the end returns empty items.
+  `total` comes from a separate `count(*)` with the same WHERE.
+- **Alternatives:** newest upload first (`created_at`); keyset/cursor pagination.
+- **Reason:** Researchers think in capture dates. `id` breaks ties so the order is total and no
+  image appears on two pages. OFFSET pagination is simple and fine at this size (it gets slower
+  only with very deep pages on large tables — keyset would fix that).
+
+## 2026-10-02 — Species index changed to `lower(crop_species)`
+- **Decision:** Replaced `idx_images_crop_species` with an expression index
+  `idx_images_crop_species_lower ON images (lower(crop_species))`. `schema.sql` drops the old index
+  if present, so existing databases migrate on restart without `down -v`.
+- **Reason:** The query filters on `lower(crop_species) = lower(%s)`. A plain index on
+  `crop_species` can't serve a condition on `lower(crop_species)`; the index must be on the same
+  expression. (Updates the "Search indexes" entry above: the species search now uses this index.)
+- **Verified:** `test_filter_query_uses_its_index` runs `EXPLAIN` on the real search SQL for each
+  filter with `enable_seqscan = off` and asserts the intended index appears in the plan. With only
+  a handful of rows Postgres normally prefers a sequential scan, which is correct at that size.

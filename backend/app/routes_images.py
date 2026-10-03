@@ -7,7 +7,7 @@ from typing import Annotated
 from urllib.parse import quote
 
 import psycopg
-from fastapi import APIRouter, File, Form, HTTPException, Response, UploadFile, status
+from fastapi import APIRouter, File, Form, HTTPException, Query, Response, UploadFile, status
 from fastapi.responses import StreamingResponse
 from psycopg.types.json import Jsonb
 from pydantic import BaseModel
@@ -53,6 +53,13 @@ class ImageUpdate(BaseModel):
     tags: list[str] | None = None
 
 
+class ImagePage(BaseModel):
+    items: list[ImageOut]
+    total: int
+    page: int
+    page_size: int
+
+
 IMAGE_SELECT = """
     SELECT i.id, i.experiment_id, e.code AS experiment_code, i.crop_species, i.capture_date,
            i.station_id, i.original_filename, i.content_type, i.size_bytes, i.width, i.height,
@@ -86,6 +93,40 @@ def experiment_id_for(conn, code: str | None) -> int | None:
     if row is None:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=f"Unknown experiment code: {code}")
     return row["id"]
+
+
+def search_where(
+    species: str | None = None,
+    experiment: str | None = None,
+    station: str | None = None,
+    tags: str | None = None,
+    date_from: dt.date | None = None,
+    date_to: dt.date | None = None,
+) -> tuple[str, list]:
+    """Build the WHERE clause for image search. Only fixed SQL fragments go into the text;
+    every user value is a %s parameter, so filters can't inject SQL."""
+    conditions, params = [], []
+    if species := clean_text(species):
+        conditions.append("lower(i.crop_species) = lower(%s)")  # idx_images_crop_species_lower
+        params.append(species)
+    if experiment := clean_text(experiment):
+        # Unknown code -> subquery is NULL -> no rows (a filter that matched nothing).
+        conditions.append("i.experiment_id = (SELECT id FROM experiments WHERE code = %s)")
+        params.append(experiment)
+    if station := clean_text(station):
+        conditions.append("i.station_id = %s")
+        params.append(station)
+    if tags and (tag_list := clean_tags(tags.split(","))):
+        conditions.append("i.tags @> %s")  # has ALL the given tags; uses the GIN index
+        params.append(tag_list)
+    if date_from:
+        conditions.append("i.capture_date >= %s")  # inclusive
+        params.append(date_from)
+    if date_to:
+        conditions.append("i.capture_date <= %s")  # inclusive
+        params.append(date_to)
+    where = " WHERE " + " AND ".join(conditions) if conditions else ""
+    return where, params
 
 
 def get_image_or_404(image_id: int) -> dict:
@@ -218,6 +259,34 @@ def upload_image(
 
     logger.info("Uploaded image %s (%s) by user %s", row["id"], file.filename, user["id"])
     return get_image_or_404(row["id"])
+
+
+@router.get("", response_model=ImagePage)
+def search_images(
+    user: security.CurrentUser,
+    species: str | None = None,
+    experiment: Annotated[str | None, Query(description="Experiment code")] = None,
+    station: str | None = None,
+    tags: Annotated[str | None, Query(description="Comma-separated; must have all")] = None,
+    date_from: Annotated[dt.date | None, Query(description="Inclusive")] = None,
+    date_to: Annotated[dt.date | None, Query(description="Inclusive")] = None,
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 24,
+):
+    if date_from and date_to and date_from > date_to:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT, detail="date_from must be on or before date_to"
+        )
+    where, params = search_where(species, experiment, station, tags, date_from, date_to)
+    total = db.fetch_one("SELECT count(*) AS n FROM images i" + where, tuple(params))["n"]
+    items = db.fetch_all(
+        IMAGE_SELECT
+        + where
+        # id breaks ties so pagination is stable (no image on two pages)
+        + " ORDER BY i.capture_date DESC NULLS LAST, i.id DESC LIMIT %s OFFSET %s",
+        (*params, page_size, (page - 1) * page_size),
+    )
+    return ImagePage(items=items, total=total, page=page, page_size=page_size)
 
 
 @router.get("/{image_id}", response_model=ImageOut)

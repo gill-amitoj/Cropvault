@@ -68,7 +68,10 @@ CREATE TABLE IF NOT EXISTS audit_log (
 );
 
 -- Search indexes (see docs/decisions.md for which search each one speeds up)
-CREATE INDEX IF NOT EXISTS idx_images_crop_species ON images (crop_species);
+-- Species search is case-insensitive, so the index is on lower(crop_species).
+-- The DROP removes the older plain index from databases created before Stage 4.
+DROP INDEX IF EXISTS idx_images_crop_species;
+CREATE INDEX IF NOT EXISTS idx_images_crop_species_lower ON images (lower(crop_species));
 CREATE INDEX IF NOT EXISTS idx_images_experiment_id ON images (experiment_id);
 CREATE INDEX IF NOT EXISTS idx_images_capture_date ON images (capture_date);
 CREATE INDEX IF NOT EXISTS idx_images_station_id ON images (station_id);
