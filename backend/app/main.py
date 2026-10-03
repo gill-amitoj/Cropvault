@@ -26,7 +26,9 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     # Without the schema the API is useless, so a DB failure here stops startup.
     db.apply_schema()
-    db.seed_admin(config.ADMIN_EMAIL, config.ADMIN_PASSWORD)
+    db.seed_user(config.ADMIN_EMAIL, config.ADMIN_PASSWORD, "admin")
+    if config.INGEST_EMAIL and config.INGEST_PASSWORD:
+        db.seed_user(config.INGEST_EMAIL, config.INGEST_PASSWORD, "researcher")
     # Don't crash the API if MinIO is down at startup; /health will report it.
     try:
         storage.ensure_bucket()

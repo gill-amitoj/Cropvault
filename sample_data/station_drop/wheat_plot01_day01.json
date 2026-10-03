@@ -1,0 +1,10 @@
+{
+  "experiment_code": "EXP-2026-001",
+  "crop_species": "Wheat",
+  "station_id": "ST01",
+  "capture_date": "2026-05-01",
+  "tags": [
+    "drought",
+    "leaf"
+  ]
+}

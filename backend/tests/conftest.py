@@ -95,7 +95,7 @@ def api(clean_db, fake_storage, monkeypatch):
     """TestClient on an empty test database with fake storage. Startup schema/admin steps are
     skipped: the schema is already applied and tests create their own users."""
     monkeypatch.setattr(db, "apply_schema", lambda: None)
-    monkeypatch.setattr(db, "seed_admin", lambda email, password: None)
+    monkeypatch.setattr(db, "seed_user", lambda email, password, role: None)
     with TestClient(main.app) as client:
         yield client
 

@@ -49,16 +49,17 @@ def apply_schema() -> None:
     logger.info("Applied schema and seed from %s", config.DB_DIR)
 
 
-def seed_admin(email: str, password: str) -> None:
-    """Create the first admin if that email doesn't exist yet. Never overwrites."""
+def seed_user(email: str, password: str, role: str) -> None:
+    """Create a user (the first admin, the ingest service account) if that email doesn't exist
+    yet. Never overwrites an existing user's password or role."""
     email = email.strip().lower()
     with get_connection() as conn:
         existing = conn.execute("SELECT id FROM users WHERE email = %s", (email,)).fetchone()
         if existing:
-            logger.info("Admin %s already exists; leaving it unchanged", email)
+            logger.info("User %s already exists; leaving it unchanged", email)
             return
         conn.execute(
-            "INSERT INTO users (email, password_hash, role) VALUES (%s, %s, 'admin')",
-            (email, security.hash_password(password)),
+            "INSERT INTO users (email, password_hash, role) VALUES (%s, %s, %s)",
+            (email, security.hash_password(password), role),
         )
-    logger.info("Created admin %s", email)
+    logger.info("Created %s %s", role, email)

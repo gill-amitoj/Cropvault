@@ -16,7 +16,7 @@ def fail():
 def client(monkeypatch):
     # Skip the real schema, admin seed and bucket creation at startup.
     monkeypatch.setattr(db, "apply_schema", ok)
-    monkeypatch.setattr(db, "seed_admin", lambda email, password: None)
+    monkeypatch.setattr(db, "seed_user", lambda email, password, role: None)
     monkeypatch.setattr(storage, "ensure_bucket", ok)
     with TestClient(main.app) as c:
         yield c

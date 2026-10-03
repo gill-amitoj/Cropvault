@@ -46,6 +46,25 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+    healthcheck:
+      # urlopen raises on 503, so this fails until DB and MinIO are both ok (no curl in slim)
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=3)"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  ingest:
+    build: ./ingest
+    env_file: .env
+    environment:
+      API_URL: http://api:8000/api
+      WATCH_DIR: /data/station_drop
+    volumes:
+      - ./data/station_drop:/data/station_drop # drop images here (gitignored)
+    depends_on:
+      api:
+        condition: service_healthy
 
 volumes:
   pgdata:

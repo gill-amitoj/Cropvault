@@ -28,6 +28,10 @@ DB_DIR = os.environ.get("DB_DIR", "/db")
 ADMIN_EMAIL = _require("ADMIN_EMAIL")
 ADMIN_PASSWORD = _require("ADMIN_PASSWORD")
 
+# Optional researcher service account used by the ingest service
+INGEST_EMAIL = os.environ.get("INGEST_EMAIL")
+INGEST_PASSWORD = os.environ.get("INGEST_PASSWORD")
+
 # JWT: HS256 signing secret and token lifetime (default 8 hours)
 JWT_SECRET = _require("JWT_SECRET")
 JWT_EXPIRE_MINUTES = int(os.environ.get("JWT_EXPIRE_MINUTES", "480"))

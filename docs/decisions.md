@@ -298,3 +298,60 @@ Judgment calls not already fixed in CLAUDE.md. Format: date, decision, alternati
 - **Verified:** `test_filter_query_uses_its_index` runs `EXPLAIN` on the real search SQL for each
   filter with `enable_seqscan = off` and asserts the intended index appears in the plan. With only
   a handful of rows Postgres normally prefers a sequential scan, which is correct at that size.
+
+## 2026-10-02 — Ingest service account is seeded by the API (Stage 5)
+- **Decision:** On startup the API creates `INGEST_EMAIL` / `INGEST_PASSWORD` as a **researcher** if
+  that email doesn't exist (`seed_user()`, same never-overwrite rule as the admin; `seed_admin` was
+  generalized into `seed_user(email, password, role)`). Both variables are optional for the API.
+- **Alternatives:** An admin creates the account by hand through the API.
+- **Reason:** `docker compose up` works with no manual step. A researcher (not admin) account follows
+  least privilege: it can upload and edit only its own images.
+
+## 2026-10-02 — Sidecar naming: `leaf01.jpg` → `leaf01.json`
+- **Decision:** The sidecar is the image path with its extension replaced by `.json`.
+- **Alternatives:** `leaf01.jpg.json`; accept both.
+- **Reason:** CLAUDE.md's `<image>.json` is ambiguous; one rule is simpler to test and document.
+  Only known fields are read (`experiment_code`, `crop_species`, `station_id`, `capture_date`,
+  `tags` as list or comma string); other keys are ignored. Validation of values (date format,
+  experiment existence) is left to the API so there is one source of truth.
+
+## 2026-10-02 — Missing sidecar: 5 s grace, then filename fallback
+- **Decision:** When an image is stable (trap #1) but has no sidecar, wait a further 5 s for one;
+  then use the filename pattern. A sidecar that exists must itself be stable (2 s) before use.
+  Image and sidecar stability are checked on every poll, so their timers run in parallel.
+- **Alternatives:** Fall back to the filename immediately.
+- **Reason:** A station that writes the image before the sidecar would otherwise lose its metadata.
+  Cost: files without sidecars are ingested ~7 s after the last write instead of ~2 s.
+
+## 2026-10-02 — Retries exhausted → `failed/` with a reason file
+- **Decision:** Network errors and 5xx: 5 attempts with 1, 2, 4, 8 s waits; then the file moves to
+  `failed/` with reason "API unavailable after 5 attempts (...)". 401 → log in again once (tokens
+  expire after 8 h); other 4xx → `failed/` immediately; 409 → `processed/` (duplicate = success).
+  Every failed file gets `<name>.reason.txt`; to retry, copy it back into the drop folder.
+- **Alternatives:** Leave the file in place and retry forever.
+- **Reason:** Matches CLAUDE.md (files end in processed/ or failed/), never loops forever on a file the
+  API keeps rejecting, and never deletes data.
+
+## 2026-10-02 — Folder watching with watchdog's `PollingObserver`
+- **Decision:** `PollingObserver(timeout=1s)` on the drop folder (non-recursive), plus a scan of
+  existing files at startup. Events only add paths to a pending set; a 1 s main loop decides.
+- **Alternatives:** Native observer (inotify on Linux).
+- **Reason:** On Docker Desktop for Mac, file events from the host often don't reach containers
+  through bind mounts, so a native observer can silently miss files. Polling one small folder every
+  second is cheap and reliable.
+
+## 2026-10-02 — Other ingest file rules
+- **Decision:** Hidden files (`.DS_Store`) and temp suffixes (`.part`, `.tmp`, `.crdownload`, `.swp`)
+  are ignored; any other non-image file → `failed/` "unsupported file type". On a name clash in
+  `processed/` or `failed/`, the image and sidecar both get the same `-1`, `-2` suffix — nothing is
+  overwritten. Wrong ingest credentials at startup stop the service (config error); an unreachable
+  API is retried every 5 s. The API container got a healthcheck (`/api/health`) and the ingest
+  service waits for it.
+- **Reason:** Stations often write temp names and rename when done; those must not be ingested early.
+
+## 2026-10-02 — Synthetic sample data for now
+- **Decision:** `sample_data/make_samples.py` draws 20 synthetic files (+ sidecars) covering every
+  ingestion path; they are committed (~0.5 MB) so the CLAUDE.md `cp` demo works.
+- **Alternatives:** Wait for real CC0 photos.
+- **Reason:** Unblocks Stage 5 now. Real photos (with sources/licences) replace them before README
+  screenshots.
