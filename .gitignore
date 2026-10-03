@@ -1,0 +1,22 @@
+# Secrets
+.env
+
+# Runtime data (mounted into containers, never committed)
+data/
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Node
+node_modules/
+dist/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
