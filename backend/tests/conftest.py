@@ -1,8 +1,10 @@
+import io
 import os
 from pathlib import Path
 
 import psycopg
 import pytest
+from PIL import Image
 from psycopg import sql
 
 # Dummy settings so app.config can be imported without a real .env.
@@ -54,13 +56,46 @@ def clean_db(test_database):
         )
 
 
+class FakeStorage:
+    """In-memory stand-in for app.storage. Unit tests never call real MinIO."""
+
+    def __init__(self):
+        self.objects = {}  # key -> (bytes, content_type)
+        self.fail_put_on = None  # key prefix that makes put_object fail
+        self.fail_delete = False
+
+    def put_object(self, key, data, content_type):
+        if self.fail_put_on and key.startswith(self.fail_put_on):
+            raise ConnectionError("fake storage put failure")
+        self.objects[key] = (data, content_type)
+
+    def open_object(self, key):
+        if key not in self.objects:
+            raise storage.ObjectNotFound(key)
+        return iter([self.objects[key][0]])
+
+    def delete_object(self, key):
+        if self.fail_delete:
+            raise ConnectionError("fake storage delete failure")
+        self.objects.pop(key, None)
+
+
 @pytest.fixture
-def api(clean_db, monkeypatch):
-    """TestClient on an empty test database. Startup schema/admin/bucket steps are skipped:
-    the schema is already applied, tests create their own users, and MinIO is never called."""
+def fake_storage(monkeypatch):
+    fake = FakeStorage()
+    monkeypatch.setattr(storage, "put_object", fake.put_object)
+    monkeypatch.setattr(storage, "open_object", fake.open_object)
+    monkeypatch.setattr(storage, "delete_object", fake.delete_object)
+    monkeypatch.setattr(storage, "ensure_bucket", lambda: None)
+    return fake
+
+
+@pytest.fixture
+def api(clean_db, fake_storage, monkeypatch):
+    """TestClient on an empty test database with fake storage. Startup schema/admin steps are
+    skipped: the schema is already applied and tests create their own users."""
     monkeypatch.setattr(db, "apply_schema", lambda: None)
     monkeypatch.setattr(db, "seed_admin", lambda email, password: None)
-    monkeypatch.setattr(storage, "ensure_bucket", lambda: None)
     with TestClient(main.app) as client:
         yield client
 
@@ -79,3 +114,29 @@ def make_user(role="researcher", email=None, is_active=True):
         ).fetchone()
     user["headers"] = {"Authorization": f"Bearer {security.create_token(user['id'])}"}
     return user
+
+
+def image_bytes(fmt="JPEG", size=(640, 480), color=(30, 120, 40), mode="RGB", exif=None):
+    """Build a real image in memory. Change `color` to get different bytes (different sha256)."""
+    img = Image.new(mode, size, color)
+    buffer = io.BytesIO()
+    kwargs = {"exif": exif} if exif is not None else {}
+    img.save(buffer, fmt, **kwargs)
+    return buffer.getvalue()
+
+
+def upload(api, user, data, filename="leaf.jpg", content_type="image/jpeg", **fields):
+    return api.post(
+        "/api/images",
+        files={"file": (filename, data, content_type)},
+        data=fields,
+        headers=user["headers"],
+    )
+
+
+def make_experiment(code="EXP-2026-001", title="Test experiment"):
+    with db.get_connection() as conn:
+        return conn.execute(
+            "INSERT INTO experiments (code, title) VALUES (%s, %s) RETURNING id, code",
+            (code, title),
+        ).fetchone()

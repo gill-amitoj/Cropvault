@@ -183,3 +183,82 @@ Judgment calls not already fixed in CLAUDE.md. Format: date, decision, alternati
 - **Alternatives:** `user: dict = Depends(...)` defaults and disable ruff rule B008.
 - **Reason:** FastAPI's recommended style; keeps ruff's B008 bug check on; the role rule is visible
   in each route's signature.
+
+## 2026-10-02 — Uploads reference experiments by code (Stage 3)
+- **Decision:** `POST /api/images` and `PATCH /api/images/{id}` take `experiment_code`
+  (e.g. `EXP-2026-001`); an unknown code → 400 and nothing is stored.
+- **Alternatives:** `experiment_id`.
+- **Reason:** Sidecars written by imaging stations naturally carry the human-readable code; the
+  ingest service won't need to look up ids.
+
+## 2026-10-02 — Decompression bombs → 413; Pillow's warning treated as an error
+- **Decision:** Pillow's `DecompressionBombWarning` (> ~89 MP) and `DecompressionBombError`
+  (> ~179 MP) both → 413 "Image dimensions are too large". `MAX_IMAGE_PIXELS` left at default.
+- **Alternatives:** 400; or only reject at Pillow's hard error threshold.
+- **Reason:** Same family as the 20 MB limit ("too large to process"). By default Pillow only
+  *warns* in the lower range and decodes anyway, which still costs gigabytes of RAM.
+
+## 2026-10-02 — 20 MB limit enforced twice
+- **Decision:** (1) HTTP middleware rejects `POST /api/images` with `Content-Length` > 20 MB + 1 MB
+  multipart allowance → 413 before the body is received. (2) The route reads at most 20 MB + 1 byte
+  and rejects anything larger → 413.
+- **Alternatives:** Only the route check.
+- **Reason:** FastAPI parses the whole multipart body (spooling to disk) before the route runs, so
+  the route check alone still accepts a 2 GB upload first. Clients that don't send Content-Length
+  (chunked) are still caught by check (2). Limitation: a production setup would also cap body size
+  in a reverse proxy (nginx `client_max_body_size`).
+
+## 2026-10-02 — EXIF: store a whitelist of readable tags
+- **Decision:** Keep Make, Model, Software, DateTimeOriginal, Orientation, ExposureTime, FNumber,
+  ISOSpeedRatings, FocalLength (from IFD0 + Exif sub-IFD), converted to JSON-safe values.
+- **Alternatives:** Every tag stringified.
+- **Reason:** Binary blobs (MakerNote, thumbnails) are large and not valid JSON; the whitelist is
+  what researchers actually filter or read. `capture_date` = form value, else the DATE part of
+  `DateTimeOriginal`, else NULL (EXIF has no timezone — trap #12).
+
+## 2026-10-02 — Random storage keys (`originals/<uuid>.<ext>`, `thumbnails/<uuid>.jpg`)
+- **Decision:** Object keys use a fresh UUID per upload; extension from the Pillow-detected format.
+- **Alternatives:** Content-addressed keys (`originals/<sha256>`).
+- **Reason:** Upload compensation ("insert failed → delete the objects I wrote") is only safe if
+  the keys are mine alone. With sha-named keys, two racing uploads of the same file write the same
+  key, and the loser's cleanup would delete the winner's original. The original filename is never
+  used in a key (no path tricks), only stored as metadata.
+
+## 2026-10-02 — Duplicate response shape
+- **Decision:** `409 {"detail": {"message": "Duplicate image", "image_id": <existing id>}}`.
+- **Alternatives:** `{"detail": "...", "image_id": N}` at the top level.
+- **Reason:** Keeps the single-`detail` error convention; ingest reads `detail.image_id`.
+
+## 2026-10-02 — Deleting an original with derived images → 409
+- **Decision:** The DB's `ON DELETE RESTRICT` raises; the API returns 409 "This image has derived
+  images (crops/masks). Delete those first." Nothing is removed from storage.
+- **Alternatives:** 400.
+- **Reason:** 409 = conflicts with the current state of the resource, which is exactly this.
+
+## 2026-10-02 — Stored width/height are the DISPLAY orientation
+- **Decision:** For EXIF orientations 5-8 (90°/270° rotation) the stored `width`/`height` are
+  swapped to match how the image is displayed. Thumbnails apply `exif_transpose`. Original bytes are
+  stored untouched.
+- **Alternatives:** Store the raw pixel dimensions.
+- **Reason:** The frontend shows the corrected image, so crop pixels (Stage 7) and normalized
+  annotation coordinates (trap #9) must be measured against the displayed orientation.
+
+## 2026-10-02 — Tags are normalized (lowercased, trimmed, de-duplicated)
+- **Decision:** `"Drought, leaf ,drought,"` → `["drought", "leaf"]`, on upload and on PATCH.
+- **Alternatives:** Store tags exactly as typed.
+- **Reason:** Makes tag search in Stage 4 simple and predictable (`drought` = `Drought`) without
+  case-insensitive array queries. Species and station are only trimmed, not lowercased.
+
+## 2026-10-02 — Thumbnail details
+- **Decision:** 320 px wide JPEG (quality 85), height keeps aspect ratio; images narrower than 320 px
+  are not upscaled. Transparent PNGs are flattened on white. 16/32-bit TIFFs are contrast-stretched
+  from their real min..max to 8-bit.
+- **Reason:** Upscaling adds no information. Without stretching, a 16-bit scientific TIFF converts
+  to an almost all-white thumbnail because every value above 255 clips.
+
+## 2026-10-02 — Audit log endpoint shape
+- **Decision:** `GET /api/audit` (admin): newest first, `page` (≥1) and `page_size` (1-100,
+  default 24), returns `{items, total, page, page_size}`; each item includes `user_email`.
+  Lives in `routes_audit.py` (not in the CLAUDE.md layout).
+- **Reason:** Uses the pagination limits already decided in CLAUDE.md; the same response shape is
+  proposed for `GET /images` in Stage 4.

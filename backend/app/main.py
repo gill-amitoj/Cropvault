@@ -3,10 +3,20 @@
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import APIRouter, FastAPI
+from fastapi import APIRouter, FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from app import config, db, routes_auth, routes_experiments, routes_users, storage
+from app import (
+    config,
+    db,
+    images,
+    routes_audit,
+    routes_auth,
+    routes_experiments,
+    routes_images,
+    routes_users,
+    storage,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -27,6 +37,22 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="CropVault API", lifespan=lifespan)
 api = APIRouter(prefix="/api")
+
+# Allowance for multipart boundaries and form fields on top of the file itself.
+MULTIPART_OVERHEAD_BYTES = 1024 * 1024
+
+
+@app.middleware("http")
+async def reject_oversized_uploads(request: Request, call_next):
+    """Reject a too-big upload from its Content-Length header BEFORE the body is received.
+    (Routes only run after FastAPI has read the whole body.) The upload route re-checks the
+    real file size, which also covers clients that don't send Content-Length."""
+    if request.method == "POST" and request.url.path == "/api/images":
+        length = request.headers.get("content-length")
+        limit = images.MAX_UPLOAD_BYTES + MULTIPART_OVERHEAD_BYTES
+        if length and length.isdigit() and int(length) > limit:
+            return JSONResponse({"detail": "File is larger than 20 MB"}, status_code=413)
+    return await call_next(request)
 
 
 @api.get("/health")
@@ -49,4 +75,6 @@ def health():
 api.include_router(routes_auth.router)
 api.include_router(routes_users.router)
 api.include_router(routes_experiments.router)
+api.include_router(routes_images.router)
+api.include_router(routes_audit.router)
 app.include_router(api)
