@@ -66,6 +66,20 @@ services:
       api:
         condition: service_healthy
 
+  frontend:
+    build: ./frontend
+    environment:
+      API_PROXY_TARGET: http://api:8000 # Vite forwards /api here; the browser never sees it
+      VITE_USE_POLLING: "true" # file events don't reliably cross Docker Desktop bind mounts
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app # live reload while editing
+      - /app/node_modules # keep the container's own node_modules
+    depends_on:
+      api:
+        condition: service_healthy
+
 volumes:
   pgdata:
   miniodata:

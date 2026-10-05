@@ -355,3 +355,56 @@ Judgment calls not already fixed in CLAUDE.md. Format: date, decision, alternati
 - **Alternatives:** Wait for real CC0 photos.
 - **Reason:** Unblocks Stage 5 now. Real photos (with sources/licences) replace them before README
   screenshots.
+
+## 2026-10-03 — TIFF display: enlarged thumbnail + download (Stage 6)
+- **Decision:** The detail page shows the original for JPEG/PNG. For TIFF (which Chrome and Firefox
+  can't render) it shows the 320 px JPEG thumbnail scaled to fit, with a note and a
+  "Download original" button.
+- **Alternatives:** Generate a 1280 px JPEG preview at upload (schema + backend change); decode TIFF
+  in the browser with a library (extra dependency, slow for large files).
+- **Reason:** No backend change, so fastest. Stage 7 can still annotate TIFFs because annotation
+  coordinates are normalized 0-1 and the thumbnail keeps the aspect ratio. Limitation: TIFF preview
+  is low resolution.
+
+## 2026-10-03 — Images shown through an authenticated fetch + blob URLs
+- **Decision:** `AuthImage` fetches `/api/images/{id}/thumbnail|file` with the bearer token, shows it
+  via `URL.createObjectURL`, and revokes the URL on unmount/path change. Downloads work the same way.
+- **Alternatives:** Token in the image URL query string (`?token=`); httpOnly cookie auth.
+- **Reason:** `<img src>` can't send an Authorization header. A token in a URL leaks into server
+  logs, browser history and Referer headers. This is the direct consequence of the Stage 2
+  localStorage decision.
+
+## 2026-10-03 — Vite dev server in Compose, proxying /api
+- **Decision:** The `frontend` service runs `vite` (node:22-slim) on :5173 and forwards `/api` to
+  `http://api:8000` (`API_PROXY_TARGET`). Source is bind-mounted for live reload with polling;
+  `node_modules` stays inside the container (anonymous volume).
+- **Alternatives:** Production build served by nginx with the same proxy.
+- **Reason:** One origin for the browser, so no CORS configuration and the browser never needs
+  Docker hostnames (trap #10). Matches CLAUDE.md's port 5173. Limitation: a dev server is not a
+  production deployment (no minification caching headers, no TLS).
+
+## 2026-10-03 — Gallery filters live in the URL
+- **Decision:** `/?species=wheat&tags=drought&page=2` — the form reads from and writes to the query
+  string; results are tagged with the query they belong to so a slow old response is ignored.
+- **Reason:** Refresh, back button and shared links keep the search.
+
+## 2026-10-03 — Frontend tests and lint
+- **Decision:** Vitest + React Testing Library + jsdom: `api.ts` (bearer header, 401 handling,
+  error messages, 409 detail), `AuthImage` (token sent, blob URL revoked), permissions, nav links
+  per role, login flow. Lint with **oxlint** (what the current Vite React template ships, instead of
+  ESLint). CI job: `npm ci`, lint, test, build (`tsc -b` type check + `vite build`).
+- **Reason:** Covers the risky parts (auth, images, role-based UI) without a slow browser suite.
+  An end-to-end browser run (Playwright, headless Chromium) was done by hand for this stage, not in CI.
+
+## 2026-10-03 — Logout is a full page load to /login
+- **Decision:** `logout()` clears the token and calls `window.location.assign('/login')`.
+- **Alternatives:** Client-side `navigate('/login')`.
+- **Reason:** React Router 7 applies navigations as low-priority transitions, so clearing the user
+  first made the route guard redirect with "return to /admin", and the NEXT person logging in landed
+  on the previous user's page. A full load also wipes all in-memory data and blob URLs.
+
+## 2026-10-03 — UI hides actions by role; the backend still decides
+- **Decision:** `permissions.ts` (`canUpload`, `canEditImage`, `isAdmin`) hides nav links and
+  buttons; `RequireAuth roles=[...]` blocks pages. Admins' own role/status controls are disabled
+  (the API returns 400 for self-changes). Any 403 from the API is shown as its message.
+- **Reason:** Trap #8 — hiding is convenience; every rule is enforced and tested in the backend.

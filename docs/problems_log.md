@@ -25,3 +25,12 @@ Real problems hit while building CropVault. Format: date, problem, cause, fix.
 - **Fix:** `process_pending()` now checks image and sidecar stability on every poll before deciding,
   so both timers run in parallel. (An earlier draft also called `tracker.forget()` on the sidecar's
   own pending entry, which would have reset its timer forever — caught in review before running.)
+
+## 2026-10-03 — After logout, the next user landed on the previous user's page
+- **Problem:** Browser test: admin logs out on /admin, viewer logs in, and is sent to /admin instead
+  of the gallery.
+- **Cause:** React Router 7 runs navigation as a low-priority transition. `setUser(null)` rendered
+  first, while the location was still /admin, so the route guard redirected to /login with
+  "return to /admin"; the later `navigate('/login')` didn't clear that.
+- **Fix:** Logout now clears the token and does a full page load of /login
+  (`window.location.assign`), which also wipes in-memory data and blob URLs.
