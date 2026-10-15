@@ -408,3 +408,22 @@ Judgment calls not already fixed in CLAUDE.md. Format: date, decision, alternati
   buttons; `RequireAuth roles=[...]` blocks pages. Admins' own role/status controls are disabled
   (the API returns 400 for self-changes). Any 403 from the API is shown as its message.
 - **Reason:** Trap #8 — hiding is convenience; every rule is enforced and tested in the backend.
+
+## 2026-10-14 — Real Wikimedia Commons photos replace the synthetic samples
+- **Decision:** `sample_data/station_drop/` now holds 18 real crop photos (wheat, wheat leaf rust,
+  canola, barley, oat) from Wikimedia Commons, built by `sample_data/prepare_samples.py`, which
+  replaced `make_samples.py`. Only CC BY, CC BY-SA and public-domain files, each licence and author
+  read from the file's own Commons page; NC/ND, Unsplash/Pexels licences and unclear terms excluded.
+  Candidates were also checked visually: microscope images, scanned documents, diagrams, photos with
+  text/watermarks, people, missing authors and a mislabelled crop (triticale) were rejected.
+  `CREDITS.md` (author, licence, source link, changes) is generated from the same list as the files.
+- **Preparation:** EXIF orientation applied, all metadata removed (privacy: no GPS/camera serials),
+  resized (JPEG max 1280 px, PNG/TIFF max 768 px, ~7.3 MB total instead of ~24 MB of originals).
+  One PNG and two TIFFs keep every format path tested. The rotated phone photo is *simulated*
+  (pixels stored sideways + EXIF Orientation 6 + synthetic EXIF date) and labelled as such.
+  `unknown_experiment.jpg` and the bad-date file are crops, so their bytes differ from other samples
+  (an exact copy would hit the 409 duplicate check before the 400 it is meant to show).
+- **Alternatives:** Keep synthetic images; commit full-size originals; all-JPEG.
+- **Reason:** Real photos make the demo and screenshots credible. Resizing keeps the repo small, and
+  generating credits from code means they can't drift from the files. Downloads are cached in
+  `sample_data/.cache/` (gitignored) so rebuilding is fast and byte-for-byte reproducible.

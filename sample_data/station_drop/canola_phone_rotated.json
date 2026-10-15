@@ -1,10 +1,9 @@
 {
   "experiment_code": "EXP-2026-002",
   "crop_species": "Canola",
-  "station_id": "ST05",
-  "capture_date": "2026-06-03",
+  "station_id": "PHONE",
   "tags": [
-    "rust",
-    "scan"
+    "phone",
+    "leaf"
   ]
 }

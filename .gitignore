@@ -20,3 +20,6 @@ dist/
 .DS_Store
 .vscode/
 .idea/
+
+# Downloaded originals used by sample_data/prepare_samples.py
+sample_data/.cache/

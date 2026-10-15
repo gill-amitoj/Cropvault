@@ -34,3 +34,12 @@ Real problems hit while building CropVault. Format: date, problem, cause, fix.
   "return to /admin"; the later `navigate('/login')` didn't clear that.
 - **Fix:** Logout now clears the token and does a full page load of /login
   (`window.location.assign`), which also wipes in-memory data and blob URLs.
+
+## 2026-10-14 — Wikimedia returned HTTP 429 while downloading sample photos
+- **Problem:** `prepare_samples.py` stopped after 13 of 18 downloads with "HTTP Error 429: Your bot
+  is making too many requests".
+- **Cause:** The script fetched the originals back to back with no pause, exceeding Wikimedia's
+  rate limit for automated clients.
+- **Fix:** Pause 2 s between downloads, retry on 429 using the server's `Retry-After` (backoff, the
+  same idea as the ingest service), and cache originals in `sample_data/.cache/` (gitignored) so
+  re-runs don't download again.

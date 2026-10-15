@@ -1,9 +1,11 @@
 {
   "experiment_code": "EXP-2026-001",
   "crop_species": "Wheat",
-  "station_id": "MICRO1",
+  "station_id": "ST01",
   "capture_date": "2026-05-15",
   "tags": [
-    "microscope"
+    "rust",
+    "leaf",
+    "disease"
   ]
 }
