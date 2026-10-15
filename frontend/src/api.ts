@@ -1,6 +1,16 @@
 // The only module that talks to the backend. Every request goes to /api on the same origin
 // (the Vite dev server forwards it to FastAPI) and carries the JWT if we have one.
-import type { AuditEntry, Experiment, ImageRecord, Page, Role, User } from './types'
+import type {
+  Annotation,
+  AuditEntry,
+  BBoxGeometry,
+  Experiment,
+  ImageRecord,
+  Page,
+  PolygonGeometry,
+  Role,
+  User,
+} from './types'
 
 const TOKEN_KEY = 'cropvault_token'
 
@@ -173,6 +183,28 @@ export const uploadImage = (form: FormData) =>
   requestJson<ImageRecord>('/images', { method: 'POST', form })
 
 export const imageFilePath = (id: number) => `/images/${id}/file`
+
+/** Region in PIXELS of the displayed image; creates a new derived image. */
+export const cropImage = (id: number, region: { x: number; y: number; width: number; height: number }) =>
+  requestJson<ImageRecord>(`/images/${id}/crop`, { method: 'POST', json: region })
+
+// --- annotations --------------------------------------------------------------------------
+
+export const listAnnotations = (imageId: number) =>
+  requestJson<Annotation[]>(`/images/${imageId}/annotations`)
+
+export const createAnnotation = (
+  imageId: number,
+  annotation:
+    | { label: string; kind: 'bbox'; geometry: BBoxGeometry }
+    | { label: string; kind: 'polygon'; geometry: PolygonGeometry },
+) => requestJson<Annotation>(`/images/${imageId}/annotations`, { method: 'POST', json: annotation })
+
+export const updateAnnotation = (id: number, changes: { label?: string }) =>
+  requestJson<Annotation>(`/annotations/${id}`, { method: 'PATCH', json: changes })
+
+export const deleteAnnotation = (id: number) =>
+  requestJson<void>(`/annotations/${id}`, { method: 'DELETE' })
 export const thumbnailPath = (id: number) => `/images/${id}/thumbnail`
 
 // --- experiments, users, audit -----------------------------------------------------------

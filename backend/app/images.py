@@ -148,3 +148,22 @@ def capture_date_from_exif(exif: dict) -> dt.date | None:
         return dt.datetime.strptime(value[:10], "%Y:%m:%d").date()
     except ValueError:
         return None
+
+
+CROP_MIN_SIZE = 16  # pixels; smaller regions aren't useful as images
+CROP_JPEG_QUALITY = 95
+
+
+def crop_image(img: Image.Image, x: int, y: int, width: int, height: int) -> bytes:
+    """Cut a region out of the image AS DISPLAYED (EXIF orientation applied), so the pixel
+    coordinates match what the user saw. Saved in the parent's format: JPEG at high quality,
+    PNG/TIFF lossless. Works on a copy; the original bytes are never touched."""
+    region = ImageOps.exif_transpose(img).crop((x, y, x + width, y + height))
+    buffer = io.BytesIO()
+    if img.format == "JPEG":
+        region.save(buffer, "JPEG", quality=CROP_JPEG_QUALITY)
+    elif img.format == "PNG":
+        region.save(buffer, "PNG")
+    else:
+        region.save(buffer, "TIFF", compression="tiff_lzw")
+    return buffer.getvalue()

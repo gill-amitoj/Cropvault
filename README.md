@@ -25,6 +25,8 @@ recorded in an audit log.
   a test expecting `403` for every forbidden action.
 - **Traceability.** Originals are never modified, and every upload, edit, delete, login and user
   change is written to an audit log in the same transaction as the change.
+- **Annotations and crops.** Draw bounding boxes and polygons on an image (stored as 0-1 fractions,
+  so they line up at any display size) and crop a region into a new image linked to its parent.
 - **Web app.** Gallery, image detail with EXIF, upload, and admin pages for users and the audit log.
 - **Runs locally with one command.** Five Docker containers, free and open-source software only.
 
@@ -107,6 +109,8 @@ unknown experiment, no metadata, an unsupported file type). See
 | ![Search results](docs/screenshots/search.jpg) | ![Image detail](docs/screenshots/detail.jpg) |
 | **Duplicate upload detected** | **Admin: users and audit log** |
 | ![Duplicate upload](docs/screenshots/duplicate.jpg) | ![Admin page](docs/screenshots/admin.jpg) |
+| **Annotations: a box and a polygon** | **Crop saved as a new image linked to its parent** |
+| ![Annotations](docs/screenshots/annotations.jpg) | ![Crop](docs/screenshots/crop.jpg) |
 | **Viewer: read-only (no upload, edit or delete)** | |
 | ![Viewer view](docs/screenshots/viewer.jpg) | |
 
@@ -122,8 +126,9 @@ displayed upright and its capture date was read from EXIF.
 | Edit image metadata | yes | own images only | no |
 | Delete images | yes | own images only | no |
 | Create experiments | yes | yes | no |
-| Create / edit / delete annotations *(planned, Stage 7)* | yes | own only | no |
-| Crop into a derived image *(planned, Stage 7)* | yes | yes | no |
+| Create annotations (on any image) | yes | yes | no |
+| Edit / delete annotations | yes | own annotations only | no |
+| Crop into a derived image (any image; the crop is yours) | yes | yes | no |
 | Manage users and roles, view the audit log | yes | no | no |
 
 Every rule is enforced in the backend. The UI hides actions a role can't use, but that is only
@@ -143,6 +148,8 @@ convenience: a request sent directly (for example with `curl`) is still rejected
 | The browser can't reach `minio:9000` | Images are streamed through the API after the permission check |
 | Unreliable filenames | Sidecar JSON first, filename pattern second, otherwise `failed/` with a reason file |
 | EXIF dates have no timezone | `capture_date` stored as a `DATE` |
+| Annotations drawn on a scaled-down image | Stored as fractions (0-1) of the displayed image, validated in the API; the SVG drawing layer uses the same 0-1 coordinates |
+| Originals must never change | A crop is a new image (`parent_image_id`, `derivation = 'crop'`); the parent can't be deleted while crops exist |
 | `<img>` tags can't send a token | The frontend fetches images with the token and shows them as `blob:` URLs |
 
 Every design choice, with the alternatives considered, is in
@@ -166,6 +173,10 @@ All endpoints are under `/api`; errors are JSON `{"detail": ...}` with `400`, `4
 | GET | `/images` (filters: `species`, `experiment`, `station`, `tags`, `date_from`, `date_to`, `page`, `page_size`) | logged in |
 | GET | `/images/{id}`, `/images/{id}/file`, `/images/{id}/thumbnail` | logged in |
 | PATCH, DELETE | `/images/{id}` | admin, or the researcher who uploaded it |
+| POST | `/images/{id}/crop` (body: `x`, `y`, `width`, `height` in pixels) | admin, researcher |
+| GET | `/images/{id}/annotations` | logged in |
+| POST | `/images/{id}/annotations` (`bbox` or `polygon`, coordinates 0-1) | admin, researcher |
+| PATCH, DELETE | `/annotations/{id}` | admin, or the researcher who created it |
 | GET | `/audit` | admin |
 | GET | `/health` | anyone (checks database and storage) |
 
@@ -178,7 +189,7 @@ docker compose exec frontend npm test              # frontend
 docker compose exec api ruff check . && docker compose exec api ruff format --check .
 ```
 
-227 automated tests at the time of writing: 160 backend, 48 ingestion and 19 frontend. Backend
+299 automated tests at the time of writing: 216 backend, 48 ingestion and 35 frontend. Backend
 tests run against a separate `cropvault_test` database with object storage faked; ingestion tests
 use an injected clock and a mocked HTTP transport. GitHub Actions runs three jobs on every push:
 backend (with a PostgreSQL service container), ingestion and frontend (lint, tests and a
@@ -221,8 +232,8 @@ anywhere but your own machine.
   hardened for production (no TLS, no reverse proxy, no login rate limiting).
 - **Token storage.** The JWT is kept in `localStorage`; production would use httpOnly cookies with
   CSRF protection (trade-off documented in `docs/decisions.md`).
-- **Annotations and cropping are not built yet.** The database tables exist; the canvas and crop
-  endpoint are Stage 7.
+- **Annotation shapes are redrawn, not dragged.** The web app can create, rename and delete
+  annotations; changing a shape means deleting and redrawing it (the API supports full edits).
 - **Exact-duplicate detection only.** The same photo re-saved in another format or quality gets a
   new checksum and is stored again.
 - **TIFF preview is low resolution.** Browsers can't display TIFF, so the detail page shows the
@@ -234,8 +245,7 @@ anywhere but your own machine.
 
 ## Roadmap
 
-- **Next: Stage 7.** Annotation canvas (bounding boxes and polygons, coordinates stored normalized
-  0-1) and cropping a region into a new derived image linked to its parent.
+- **Done: Stage 7.** Annotation canvas (bounding boxes and polygons) and crop to a derived image.
 - **Optional: Stage 8.** OpenCV segmentation (Otsu threshold) saved as a derived mask image.
 - **Later.** MinIO lifecycle rules, CSV export, a summary dashboard.
 

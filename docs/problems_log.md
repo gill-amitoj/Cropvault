@@ -52,3 +52,18 @@ Real problems hit while building CropVault. Format: date, problem, cause, fix.
 - **Fix:** `overflow-wrap: anywhere` on the monospace style. Unlike `break-word`, `anywhere` also
   lowers the column's minimum width, so the table fits. Verified: page width 1280 px at a 1280 px
   window.
+
+## 2026-10-15 — Crop region one pixel too large after converting fractions to pixels
+- **Problem:** A unit test expected a box at x=0.101, width=0.2 on a 1000 px image to become
+  200 px wide; the helper returned 201.
+- **Cause:** Floating point: `(0.101 + 0.2) * 1000` is `301.00000000000006`, so `Math.ceil` gave 302
+  instead of 301 (same family as `0.1 + 0.2 !== 0.3`).
+- **Fix:** `bboxToPixels` subtracts/adds a 1e-6 tolerance before rounding up/down. Tested, including
+  that the result never goes outside the image.
+
+## 2026-10-15 — Long crop filenames ran off the image detail page
+- **Problem:** On a crop's page, the title `wheat_plot01_day01_crop_256_288_384x288.jpg` overflowed
+  the right edge.
+- **Cause:** Same as the audit-log overflow: one long word with no break opportunities.
+- **Fix:** `overflow-wrap: anywhere` on the detail page title. Verified: page width 1280 px at a
+  1280 px window.

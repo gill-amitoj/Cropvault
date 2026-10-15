@@ -303,6 +303,11 @@ button.danger {
   background: #e9ece6;
 }
 
+.detail-info h2 {
+  /* Crop filenames are long single words; let them wrap instead of running off the page. */
+  overflow-wrap: anywhere;
+}
+
 .meta {
   display: grid;
   grid-template-columns: max-content 1fr;
@@ -393,4 +398,100 @@ th {
   .page {
     padding: 1rem;
   }
+}
+
+/* --- annotation canvas (Stage 7) ------------------------------------------------------- */
+
+.toolbar {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 0.6rem;
+}
+
+/* The SVG sits exactly on top of the image; its viewBox is 0..1 in both directions. */
+.canvas-wrap {
+  position: relative;
+  line-height: 0;
+}
+
+.canvas-wrap .overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+.canvas-wrap .overlay.drawing {
+  cursor: crosshair;
+}
+
+.shape {
+  fill: rgba(255, 214, 0, 0.12);
+  stroke: #ffd600;
+  stroke-width: 2px;
+}
+
+.shape.selected {
+  fill: rgba(255, 214, 0, 0.3);
+  stroke-width: 3px;
+}
+
+.shape.draft {
+  stroke: #ffffff;
+  stroke-dasharray: 6 4;
+  fill: rgba(255, 255, 255, 0.15);
+}
+
+.shape.draft.open {
+  fill: none;
+}
+
+.shape-label {
+  position: absolute;
+  transform: translateY(-100%);
+  background: rgba(29, 42, 31, 0.85);
+  color: #fff;
+  font-size: 0.72rem;
+  line-height: 1.3;
+  padding: 0.05rem 0.35rem;
+  border-radius: 4px;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.draft-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.8rem;
+}
+
+.annotation-list {
+  padding-left: 1.4rem;
+  margin: 0;
+}
+
+.annotation-list li {
+  padding: 0.3rem 0.4rem;
+  border-radius: 6px;
+}
+
+.annotation-list li.selected {
+  background: var(--tag);
+}
+
+.annotation-list li > span:first-child {
+  margin-right: 0.6rem;
+}
+
+.list-actions {
+  display: inline-flex;
+  gap: 0.7rem;
+}
+
+.danger-link {
+  color: var(--danger);
 }

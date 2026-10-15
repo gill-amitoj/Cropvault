@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { canEditImage, canUpload, isAdmin } from '../permissions'
-import type { ImageRecord, Role, User } from '../types'
+import { canAnnotate, canEditAnnotation, canEditImage, canUpload, isAdmin } from '../permissions'
+import type { Annotation, ImageRecord, Role, User } from '../types'
 
 const user = (id: number, role: Role): User => ({
   id,
@@ -30,5 +30,22 @@ describe('what the UI shows each role (the backend enforces the real rules)', ()
   it('admin page: admin only', () => {
     expect(isAdmin(user(1, 'admin'))).toBe(true)
     expect(isAdmin(user(1, 'researcher'))).toBe(false)
+  })
+})
+
+describe('annotations (the backend enforces the real rules)', () => {
+  const annotation = { id: 1, created_by: 7 } as Annotation
+
+  it('draw and crop: admin and researcher, not viewer', () => {
+    expect(canAnnotate(user(1, 'admin'))).toBe(true)
+    expect(canAnnotate(user(1, 'researcher'))).toBe(true)
+    expect(canAnnotate(user(1, 'viewer'))).toBe(false)
+  })
+
+  it('rename/delete: admin any, researcher only their own', () => {
+    expect(canEditAnnotation(user(1, 'admin'), annotation)).toBe(true)
+    expect(canEditAnnotation(user(7, 'researcher'), annotation)).toBe(true)
+    expect(canEditAnnotation(user(8, 'researcher'), annotation)).toBe(false)
+    expect(canEditAnnotation(user(7, 'viewer'), annotation)).toBe(false)
   })
 })

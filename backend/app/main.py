@@ -10,6 +10,7 @@ from app import (
     config,
     db,
     images,
+    routes_annotations,
     routes_audit,
     routes_auth,
     routes_experiments,
@@ -78,5 +79,6 @@ api.include_router(routes_auth.router)
 api.include_router(routes_users.router)
 api.include_router(routes_experiments.router)
 api.include_router(routes_images.router)
+api.include_router(routes_annotations.router)
 api.include_router(routes_audit.router)
 app.include_router(api)

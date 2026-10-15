@@ -4,7 +4,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import * as api from '../api'
 import { useAuth } from '../authContext'
-import { AuthImage } from '../components/AuthImage'
+import { AnnotationCanvas } from '../components/AnnotationCanvas'
 import { ErrorMessage } from '../components/ErrorMessage'
 import { canEditImage } from '../permissions'
 import type { Experiment, ImageRecord } from '../types'
@@ -66,10 +66,9 @@ function ImageDetail({ id }: { id: number }) {
   return (
     <div className="detail">
       <div className="detail-image">
-        <AuthImage
-          path={showOriginal ? api.imageFilePath(image.id) : api.thumbnailPath(image.id)}
-          alt={image.original_filename}
-          className="full"
+        <AnnotationCanvas
+          image={image}
+          imagePath={showOriginal ? api.imageFilePath(image.id) : api.thumbnailPath(image.id)}
         />
         {!showOriginal && (
           <p className="muted small">

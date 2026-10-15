@@ -209,5 +209,5 @@ Frontend http://localhost:5173 · API docs http://localhost:8000/docs · MinIO c
 · Postgres from the host at localhost:5433 (5432 is taken by another local project; inside
 Compose it is still db:5432)
 
-Current stage: 9 (README). Stages 0-6 are done and pushed. Stage 7 comes after the README;
-Stage 8 (segmentation) is skipped for now.
+Current stage: Stages 0-7 and 9 (README) are done. Stage 8 (segmentation) is optional and
+skipped for now.

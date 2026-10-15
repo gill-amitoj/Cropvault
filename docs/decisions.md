@@ -446,3 +446,49 @@ Judgment calls not already fixed in CLAUDE.md. Format: date, decision, alternati
   Verified by following the README on a fresh copy of only the files git publishes (no `.env`,
   no data): quick start, every URL, the ingestion demo, all test commands and ruff all worked, and
   the Mermaid diagram was rendered with mermaid-cli.
+
+## 2026-10-15 — Annotation geometry format and limits (Stage 7)
+- **Decision:** `kind = 'bbox'` → `{"x","y","width","height"}`; `kind = 'polygon'` →
+  `{"points": [[x, y], ...]}`. Every value is a fraction 0-1 of the image as displayed. Boxes need
+  width/height > 0 and must lie inside the image (1e-9 tolerance for float rounding); polygons need
+  3-200 points; unknown fields are rejected; label 1-100 characters (trimmed). A PATCH can change the
+  label and/or the geometry, which is validated against the annotation's existing kind. Bad shapes → 422.
+- **Alternatives:** No point limit; store pixels.
+- **Reason:** Fractions line up at any display size (trap #9) and don't depend on thumbnail vs
+  original. Strict validation means nothing invalid ever reaches the JSONB column; the point limit
+  stops one request from storing an enormous polygon.
+
+## 2026-10-15 — Who may annotate
+- **Decision:** Any logged-in user can see annotations. Admins and researchers can annotate ANY
+  image; researchers can rename/edit/delete only annotations they created; admins any. Viewers 403.
+  Audit: `ANNOTATE` on create; `UPDATE` / `DELETE` with `entity_type = 'annotation'`.
+- **Alternatives:** Researchers may annotate only images they uploaded.
+- **Reason:** Researchers mark up shared data; "own only" in CLAUDE.md is read as "own annotations".
+
+## 2026-10-15 — Crop rules
+- **Decision:** `POST /api/images/{id}/crop` with `{x, y, width, height}` in pixels of the image AS
+  DISPLAYED (EXIF orientation applied). Width/height ≥ 16 px (422 otherwise); the region must lie
+  inside the displayed size (400 otherwise). The crop keeps the parent's format (JPEG quality 95;
+  PNG/TIFF lossless), copies species, experiment, station, capture date and tags, is owned by the
+  person who cropped, and is named `<parent>_crop_<x>_<y>_<w>x<h>.<ext>`. Same region twice → same
+  bytes → `409` with the existing crop's id. Same storage-then-row order and cleanup as upload.
+  Audit `CROP` with the parent id and region. Any admin or researcher may crop any image.
+- **Alternatives:** Always save crops as PNG; allow duplicate crops; crop in stored (raw) pixels.
+- **Reason:** Display orientation matches what the user saw and the stored width/height. Keeping the
+  format avoids PNG crops of JPEG photos being several times larger. Re-using the upload's
+  duplicate rule keeps "one file = one record". Known trade-off: the crop endpoint repeats the
+  upload's store-and-insert block rather than sharing a helper, to avoid rewriting the working
+  upload code.
+
+## 2026-10-15 — Drawing layer is an SVG with viewBox 0 0 1 1
+- **Decision:** `AnnotationCanvas` overlays an `<svg viewBox="0 0 1 1" preserveAspectRatio="none">`
+  exactly on the image, so SVG coordinates ARE the stored fractions; strokes use
+  `vector-effect: non-scaling-stroke`. Box: drag. Polygon: click points; click the first point or
+  press Enter to finish; Esc cancels. Labels are HTML placed with percentages. The UI creates,
+  renames and deletes annotations and crops from a drawn or saved box; changing a shape is done by
+  deleting and redrawing (the API supports full geometry edits). Pixel conversion for crops rounds
+  outward with a 1e-6 tolerance (see problems_log.md). No new dependency.
+- **Alternatives:** HTML `<canvas>` (pixel-based, more code for redraw and hit-testing); a drawing
+  library.
+- **Reason:** Resolution independent, declarative, testable with Testing Library. Verified in a real
+  browser: the same box sits at identical fractions at 1280 px and 760 px window widths.

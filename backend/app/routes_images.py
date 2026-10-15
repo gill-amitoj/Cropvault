@@ -10,7 +10,7 @@ import psycopg
 from fastapi import APIRouter, File, Form, HTTPException, Query, Response, UploadFile, status
 from fastapi.responses import StreamingResponse
 from psycopg.types.json import Jsonb
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app import audit, db, images, security, storage
 
@@ -51,6 +51,15 @@ class ImageUpdate(BaseModel):
     station_id: str | None = None
     capture_date: dt.date | None = None
     tags: list[str] | None = None
+
+
+class CropRequest(BaseModel):
+    """Region in pixels of the image as displayed (EXIF orientation applied)."""
+
+    x: int = Field(ge=0)
+    y: int = Field(ge=0)
+    width: int = Field(ge=images.CROP_MIN_SIZE)
+    height: int = Field(ge=images.CROP_MIN_SIZE)
 
 
 class ImagePage(BaseModel):
@@ -378,6 +387,99 @@ def delete_image(image_id: int, user: CanWrite):
     delete_objects_quietly([k for k in (image["storage_key"], image["thumbnail_key"]) if k])
     logger.info("Deleted image %s by user %s", image_id, user["id"])
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/{image_id}/crop", response_model=ImageOut, status_code=status.HTTP_201_CREATED)
+def crop(image_id: int, body: CropRequest, user: CanWrite):
+    """Create a NEW derived image from a region of this one (trap #6: originals are immutable).
+    Any admin or researcher may crop any image; the crop belongs to whoever made it."""
+    parent = db.fetch_one(
+        """SELECT id, experiment_id, crop_species, capture_date, station_id, original_filename,
+                  storage_key, width, height, tags
+           FROM images WHERE id = %s""",
+        (image_id,),
+    )
+    if parent is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Image not found")
+    if body.x + body.width > parent["width"] or body.y + body.height > parent["height"]:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail=f"Crop region must lie inside the image ({parent['width']}x{parent['height']})",
+        )
+
+    try:
+        original = b"".join(storage.open_object(parent["storage_key"]))
+    except storage.ObjectNotFound:
+        logger.error("Object missing from storage: %s", parent["storage_key"])
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="File not found") from None
+    img = images.open_image(original)
+    data = images.crop_image(img, body.x, body.y, body.width, body.height)
+
+    # Same region twice gives the same bytes: answer like a duplicate upload.
+    sha256 = images.sha256_hex(data)
+    existing = db.fetch_one("SELECT id FROM images WHERE sha256 = %s", (sha256,))
+    if existing:
+        raise duplicate_error(existing["id"])
+
+    content_type, extension = images.ALLOWED_FORMATS[img.format]
+    thumbnail = images.make_thumbnail(images.open_image(data))
+    object_id = uuid.uuid4().hex
+    storage_key = f"originals/{object_id}{extension}"
+    thumbnail_key = f"thumbnails/{object_id}.jpg"
+    stem = parent["original_filename"].rsplit(".", 1)[0]
+    filename = f"{stem}_crop_{body.x}_{body.y}_{body.width}x{body.height}{extension}"
+    region = body.model_dump()
+
+    # Same order as upload (trap #7): objects first, then the row; clean up on failure.
+    written = []
+    try:
+        storage.put_object(storage_key, data, content_type)
+        written.append(storage_key)
+        storage.put_object(thumbnail_key, thumbnail, "image/jpeg")
+        written.append(thumbnail_key)
+        with db.get_connection() as conn:
+            row = conn.execute(
+                """INSERT INTO images (experiment_id, crop_species, capture_date, station_id,
+                       original_filename, storage_key, thumbnail_key, content_type, size_bytes,
+                       width, height, sha256, tags, uploaded_by, parent_image_id, derivation)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'crop')
+                   RETURNING id""",
+                (
+                    parent["experiment_id"],
+                    parent["crop_species"],
+                    parent["capture_date"],
+                    parent["station_id"],
+                    filename,
+                    storage_key,
+                    thumbnail_key,
+                    content_type,
+                    len(data),
+                    body.width,
+                    body.height,
+                    sha256,
+                    parent["tags"],
+                    user["id"],
+                    image_id,
+                ),
+            ).fetchone()
+            audit.write_audit(
+                conn,
+                user["id"],
+                "CROP",
+                "image",
+                row["id"],
+                {"parent_image_id": image_id, "region": region},
+            )
+    except psycopg.errors.UniqueViolation:
+        delete_objects_quietly(written)
+        existing = db.fetch_one("SELECT id FROM images WHERE sha256 = %s", (sha256,))
+        raise duplicate_error(existing["id"]) from None
+    except Exception:
+        delete_objects_quietly(written)
+        raise
+
+    logger.info("Cropped image %s -> %s by user %s", image_id, row["id"], user["id"])
+    return get_image_or_404(row["id"])
 
 
 def stream_object(key: str | None, media_type: str, headers: dict | None = None):

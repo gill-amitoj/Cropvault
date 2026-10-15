@@ -57,3 +57,26 @@ export interface AuditEntry {
   details: Record<string, unknown> | null
   created_at: string
 }
+
+// Annotation coordinates are fractions (0-1) of the displayed image, so they line up at any size.
+export interface BBoxGeometry {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+export interface PolygonGeometry {
+  points: [number, number][]
+}
+
+export interface Annotation {
+  id: number
+  image_id: number
+  label: string
+  kind: 'bbox' | 'polygon'
+  geometry: BBoxGeometry | PolygonGeometry
+  created_by: number
+  created_at: string
+  updated_at: string
+}
