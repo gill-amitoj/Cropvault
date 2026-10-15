@@ -427,3 +427,22 @@ Judgment calls not already fixed in CLAUDE.md. Format: date, decision, alternati
 - **Reason:** Real photos make the demo and screenshots credible. Resizing keeps the repo small, and
   generating credits from code means they can't drift from the files. Downloads are cached in
   `sample_data/.cache/` (gitignored) so rebuilding is fast and byte-for-byte reproducible.
+
+## 2026-10-15 — README and MIT licence (Stage 9)
+- **Decision:** One `README.md` (what/why, Mermaid architecture diagram, quick start, ingestion
+  demo, real screenshots, RBAC table, how each hard problem is handled, API overview, tests/CI,
+  configuration, known limitations, roadmap) linking to `docs/decisions.md` and
+  `docs/problems_log.md` for depth. Code licensed **MIT** (`LICENSE`, copyright "gill-amitoj"); the
+  sample photos keep their own licences (`sample_data/CREDITS.md`).
+- **No credentials in the README:** readers set their own passwords in `.env` and log in with
+  `ADMIN_EMAIL`/`ADMIN_PASSWORD` from it; other users are created on the Admin page. The README only
+  names the variables, never values.
+- **Screenshots** were taken with headless Chromium on the running app with the real sample photos,
+  not mocked up.
+- **Alternatives:** Show the `.env.example` placeholder logins; a separate ARCHITECTURE.md;
+  manual screenshots; Apache-2.0 / GPL licences.
+- **Reason:** One page for a reviewer, with depth one click away. MIT is the simplest permissive
+  licence. Keeping credentials out of the README avoids teaching readers to reuse placeholders.
+  Verified by following the README on a fresh copy of only the files git publishes (no `.env`,
+  no data): quick start, every URL, the ingestion demo, all test commands and ruff all worked, and
+  the Mermaid diagram was rendered with mermaid-cli.

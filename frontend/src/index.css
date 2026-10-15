@@ -356,6 +356,8 @@ th {
 
 .mono {
   font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  /* Long unbroken values (SHA-256, audit JSON) must wrap instead of widening the page. */
+  overflow-wrap: anywhere;
 }
 
 .ellipsis {

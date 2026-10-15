@@ -43,3 +43,12 @@ Real problems hit while building CropVault. Format: date, problem, cause, fix.
 - **Fix:** Pause 2 s between downloads, retry on 429 using the server's `Retry-After` (backoff, the
   same idea as the ingest service), and cache originals in `sample_data/.cache/` (gitignored) so
   re-runs don't download again.
+
+## 2026-10-15 — Admin page wider than the screen
+- **Problem:** While taking README screenshots, the audit log table on the Admin page pushed the
+  page past the window edge (horizontal scrolling).
+- **Cause:** The Details column holds long unbroken strings (64-character SHA-256 inside JSON).
+  A table column can't be narrower than its longest unbreakable word, so the table grew.
+- **Fix:** `overflow-wrap: anywhere` on the monospace style. Unlike `break-word`, `anywhere` also
+  lowers the column's minimum width, so the table fits. Verified: page width 1280 px at a 1280 px
+  window.
