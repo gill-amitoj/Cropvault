@@ -44,7 +44,9 @@ I am learning. I must be able to explain every part of this project in an interv
 ## Tech stack
 - Python 3.11+, FastAPI, Uvicorn
 - PostgreSQL 16 with `psycopg[binary]` (plain SQL, no ORM), schema in `db/schema.sql`
-- MinIO (free, S3-compatible object storage) via the `minio` Python client
+- MinIO (free, S3-compatible object storage) via the `minio` Python client. Official MinIO
+  images are no longer published, so Compose uses the `pgsty/minio` community build, pinned
+  to an exact tag (see docs/decisions.md)
 - Auth: PyJWT for tokens, argon2 (`argon2-cffi`) for password hashing
 - Pillow for image checks, thumbnails, EXIF, and crops; OpenCV only in Stage 8
 - `watchdog` + `httpx` for the ingestion service
@@ -152,7 +154,7 @@ cropvault/
   created_by, created_at, updated_at)
   kind ∈ {bbox, polygon}; geometry coordinates normalized 0-1
 - audit_log(id, user_id, action, entity_type, entity_id, details JSONB, created_at)
-  action ∈ {LOGIN, UPLOAD, UPDATE, DELETE, ANNOTATE, CROP, SEGMENT, ROLE_CHANGE}
+  action ∈ {LOGIN, UPLOAD, UPDATE, DELETE, ANNOTATE, CROP, SEGMENT, ROLE_CHANGE, USER_CREATE}
 
 Indexes: crop_species, experiment_id, capture_date, station_id, GIN on tags.
 Explain each index in `docs/decisions.md` (which search it speeds up).
@@ -204,5 +206,8 @@ docker compose exec api ruff check . && docker compose exec api ruff format --ch
 cp sample_data/station_drop/* data/station_drop/     # trigger the ingestion demo
 ```
 Frontend http://localhost:5173 · API docs http://localhost:8000/docs · MinIO console http://localhost:9001
+· Postgres from the host at localhost:5433 (5432 is taken by another local project; inside
+Compose it is still db:5432)
 
-Current stage: 0
+Current stage: 9 (README). Stages 0-6 are done and pushed. Stage 7 comes after the README;
+Stage 8 (segmentation) is skipped for now.
