@@ -6,7 +6,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
-      - "5433:5432" # host 5433 so it can run next to other local Postgres (e.g. LedgerLens)
+      - "127.0.0.1:5433:5432" # host 5433 so it can run next to other local Postgres (e.g. LedgerLens)
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -23,8 +23,8 @@ services:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
     volumes:
       - miniodata:/data
     healthcheck:
@@ -37,7 +37,7 @@ services:
     build: ./backend
     env_file: .env
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     volumes:
       - ./backend:/app # live code reload during development
       - ./db:/db:ro # schema.sql + seed.sql, applied on startup
@@ -72,7 +72,7 @@ services:
       API_PROXY_TARGET: http://api:8000 # Vite forwards /api here; the browser never sees it
       VITE_USE_POLLING: "true" # file events don't reliably cross Docker Desktop bind mounts
     ports:
-      - "5173:5173"
+      - "127.0.0.1:5173:5173"
     volumes:
       - ./frontend:/app # live reload while editing
       - /app/node_modules # keep the container's own node_modules

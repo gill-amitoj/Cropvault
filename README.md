@@ -88,6 +88,8 @@ in `.env`. The admin account is created on first startup; add researchers and vi
 | http://localhost:9001 | MinIO console (log in with `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` from `.env`) |
 | `localhost:5433` | PostgreSQL from the host (inside Compose it is `db:5432`) |
 
+All ports are published on `127.0.0.1` only, so other devices on your network can't reach them.
+
 ### Try the ingestion pipeline
 
 ```bash
@@ -215,8 +217,8 @@ data/           runtime drop folder (gitignored, mounted into the ingest contain
 
 ## Configuration
 
-All settings come from `.env` (copy `.env.example`). Change every placeholder before using this
-anywhere but your own machine.
+All settings come from `.env` (copy `.env.example`). Replace every `change-me` placeholder with a
+strong random value (`.env.example` shows a one-line generator): the placeholders are public.
 
 | Variable | Purpose |
 |---|---|

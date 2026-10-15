@@ -492,3 +492,15 @@ Judgment calls not already fixed in CLAUDE.md. Format: date, decision, alternati
   library.
 - **Reason:** Resolution independent, declarative, testable with Testing Library. Verified in a real
   browser: the same box sits at identical fractions at 1280 px and 760 px window widths.
+
+## 2026-10-15 — Ports bound to 127.0.0.1; no placeholder passwords in use
+- **Decision:** Every published port in `docker-compose.yml` is `127.0.0.1:<host>:<container>`
+  (5173, 8000, 9000, 9001, 5433). The local `.env` uses random values (`secrets.token_urlsafe(18)`)
+  for every password; `.env` is `chmod 600`. `.env.example` keeps public placeholders and tells
+  readers to replace all of them.
+- **Alternatives:** Publish on all interfaces (Docker's default `0.0.0.0`); keep the placeholders
+  for a local demo.
+- **Reason:** Docker's default makes the services reachable from any device on the same network
+  (café/campus Wi-Fi), and the placeholder passwords are public in the repo. Binding to localhost
+  removes network exposure entirely; random passwords remove the known-credential risk. Containers
+  still talk to each other on the internal Compose network, so nothing else changes.

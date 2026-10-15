@@ -67,3 +67,17 @@ Real problems hit while building CropVault. Format: date, problem, cause, fix.
 - **Cause:** Same as the audit-log overflow: one long word with no break opportunities.
 - **Fix:** `overflow-wrap: anywhere` on the detail page title. Verified: page width 1280 px at a
   1280 px window.
+
+## 2026-10-15 — Local passwords were the public placeholders, and ports were open to the network
+- **Problem:** A history scan confirmed no secret was ever committed (`.env` never committed; the
+  random `JWT_SECRET` and `INGEST_PASSWORD` appear 0 times). But the local `.env` still used the
+  `change-me-*` placeholders from `.env.example` for the admin, Postgres and MinIO passwords, and
+  Docker published every port on all network interfaces.
+- **Cause:** `.env` was created with `cp .env.example .env` and only some values were changed;
+  Compose's `"8000:8000"` form binds to `0.0.0.0` by default.
+- **Fix:** Random passwords in `.env` (`chmod 600`), volumes recreated so Postgres and the admin
+  account use them, ports bound to `127.0.0.1`. Verified: old admin password → 401; old Postgres
+  password rejected over the network ("password authentication failed"); old MinIO password
+  rejected; ports unreachable from the machine's LAN address and reachable on localhost.
+  (Note: Postgres inside its own container trusts local connections, so a password test must
+  connect from another container.)
